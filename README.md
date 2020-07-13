@@ -1,5 +1,4 @@
 # RBM
-Implementation of a restricted Blotzmann machine
 
 classe_RBM.py contains an obect-oriented implementation of several Boltzmann machines 
 
