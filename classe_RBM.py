@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Tue Jun  9 18:16:23 2020
 
@@ -17,11 +16,93 @@ from numpy.random import normal
 from scipy.stats import norm
 
 def sigmoid(x):
-    return 1/(1+np.exp(-x))
+    #pasDeNan(x)
+    x = bornage(x)
+    res = 1/(1+np.exp(-x))
+    return res
+
+
+def reduc(x, V):
+    return np.dot(x, V)[0:2]
+
+def getMiniBatches(X,m,bs):
+    return X[m*bs:(m+1)*bs]
+
+def bornage(x):
+    x = np.maximum(x, -100)
+    x = np.minimum(x, 100)
+    return x
+
+def isNan(x):
+    return np.any(x != x)
+    
+def pasDeNan(x):
+    if np.any(x != x):
+        raise RuntimeError
+
+def genNuage(rbm, P, k=100, nbEpoch = 100, nb = 100):
+        #nb = 100
+        X = []
+        Y = []
+        #print("debut")
+        Xcoo = []
+        Ycoo = []
+        
+        for i in range(nb):
+            #print(i)
+            v = np.random.random(rbm.num_visible)
+            v = rbm.gibbsSampling(v, k)
+            x, y = reduc(v, P)
+            #x = v[0]
+            #y = v[1]
+            
+            X.append(x)
+            Y.append(y)
+            
+            x = v[0]
+            y = v[1]
+            
+            Xcoo.append(x)
+            Ycoo.append(y)
+            
+            if i%20 == 0:
+                print("*", end='')
+        
+        print()
+        plt.title("100 points générées après %s epochs d'entrainement" % int(nbEpoch))
+        plt.xlim(-15, 15)
+        plt.ylim(-15, 15)
+        plt.plot(X, Y, 'xb', label='selon la PCA')
+        #plt.plot(Xcoo, Ycoo, 'xr', label='premières coordonnées')
+        plt.legend()
+        plt.savefig("%s points générés après %s epochs d'entrainement" % (nb, int(nbEpoch)))
+        plt.show()
+                
+def affData(data, V):
+        """Les 1000 premiers points"""
+        X = np.dot(data, V)[:1000,0]
+        Y = np.dot(data, V)[:1000,1]
+
+    
+    
+        #X = data[:,0]
+        #Y = data[:,1]
+        #print(X.shape)
+                
+        plt.title("Données (2 premières composantes)")
+        plt.xlim(-15, 15)
+        plt.ylim(-15, 15)
+        plt.plot(X, Y, 'xb', label="selon la PCA")
+        X = data[:,0]
+        Y = data[:,1]
+        #plt.plot(X, Y, 'xr', label="réelles")
+        plt.legend()
+        plt.savefig("Données")
+        plt.show()
 
 class RBM:
   
-    def __init__(self, num_visible, num_hidden, lr = 0.01):
+    def __init__(self, num_visible, num_hidden, P, lr = 0.01):
         self.num_hidden = num_hidden
         self.num_visible = num_visible
         self.debug_print = True
@@ -38,6 +119,10 @@ class RBM:
         
         self.cote = int(self.num_visible ** (1/2))
         
+        self.printNuage = True
+        
+        #self.P = P
+        
         # Initialize a weight matrix, of dimensions (num_visible x num_hidden), using
         # a uniform distribution between -sqrt(6. / (num_hidden + num_visible))
         # and sqrt(6. / (num_hidden + num_visible)). One could vary the 
@@ -53,6 +138,7 @@ class RBM:
     def SampleHiddens(self, X):
         p_h = self.probaHiddens(X)
         h = (np.random.random(self.num_hidden) < p_h)*1
+        pasDeNan(h)
         return h
     
     def probaVisible(self, H):        
@@ -61,6 +147,7 @@ class RBM:
     def SampleVisibles(self, H):
         p_v = self.probaVisible(H)
         v = (np.random.random(self.num_visible) < p_v)*1
+        pasDeNan(v)
         return v
 
     def gibbsSampling(self, X, k=1000):
@@ -68,16 +155,33 @@ class RBM:
         for _ in range(self.k):
             h = self.SampleHiddens(v)
             v = self.SampleVisibles(h)
+            v = bornage(v)
+            #pasDeNan(v)
         return v
     
     def updateParameters(self, example, x_tilde):
         return
     
     def computeError(self, data):
+
         sum = 0
         for example in data:
             sum += np.sum((example - self.probaVisible(self.SampleHiddens(example))) ** 2)
         return sum*100/data.size
+        """
+        v = np.random.random(self.num_visible)
+        v = self.gibbsSampling(v, 1000)
+        if isNan(v):
+            print("pb computeError")
+            return self.computeError(data)
+        #x, y = reduc(v, self.P)
+        return np.mean(np.min(np.abs(data - v), axis=0))
+        """
+    
+    
+    #def distData(self, data):
+        
+        
 
     def train(self, data, max_epochs = 1000):
         t0 = time()
@@ -86,14 +190,24 @@ class RBM:
         for epoch in range(max_epochs):      
             for example in data :
                 x_tilde = self.gibbsSampling(x_tilde, self.k)
-                
-                self.updateParameters(example, x_tilde)
-                
+                pb = 0
+                if not isNan(x_tilde):
+                    self.updateParameters(example, x_tilde)
+                else:
+                    pb += 1
+                    x_tilde = np.random.random(self.num_visible)
+                    
+                if pb > 50:
+                    print("taux d'erreur : %s" % (pb / data.shape[0]))
             if self.debug_print:
                 error = self.computeError(data)
                 print("Epoch %s: error is %s" % (epoch, error))
                 self.L_errors.append(error)
                 self.param_save()
+                
+            if self.printNuage and epoch % 1 == 0:
+                genNuage(self, self.P, k=1000, nbEpoch = epoch, nb=1000)
+                
         
         print("durée d'entraiement : %s" % (time() - t0))
                 
@@ -150,6 +264,19 @@ class RBM:
         plt.imshow(v.reshape(self.cote, self.cote))
         plt.show()
         
+    def genPt(self, k=1000):
+
+        v = np.random.random(self.num_visible)
+        v = self.gibbsSampling(v, k)
+        x, y = reduc(v, self.P)
+        #x = v[0]
+        #y = v[1]
+        plt.title("image générée par la RBM")
+        plt.plot(x, y, 'x')
+        plt.show()
+        
+        
+        
     def gen1Pixel(self, k=1000):
         v0 = np.random.random(self.num_visible)
         v = self.gibbsSampling(v0)
@@ -192,10 +319,12 @@ class RBM:
         plt.show()
         
 class GBRBM_adapte(RBM):
-    def __init__(self, num_visible, num_hidden, lr, useZ = True):
-        super().__init__(num_visible, num_hidden, lr)
-        self.printEvolParam = True
-    
+    def __init__(self, num_visible, num_hidden, lr, P, useZ = True):
+        super().__init__(num_visible, num_hidden, P, lr)
+        self.printEvolParam = False
+        
+        self.P = P
+        
         np_rng = np.random.RandomState(1234)
     
         #self.visible_bias = np.zeros(num_visible) # TEST
@@ -220,7 +349,8 @@ class GBRBM_adapte(RBM):
         self.useZ = useZ
         
         if self.useZ:
-            self.z = - np.ones(num_visible)
+            self.z = np.zeros(num_visible)
+            #self.z = - np.ones(num_visible)
             self.L_z = []
         else:
             self.sigma = np.ones(num_visible) * 0.1
@@ -239,11 +369,16 @@ class GBRBM_adapte(RBM):
             p_h[j] = sigmoid( s1 + self.hidden_bias[j] + s2)
         return p_h
         """
+        
+        #print(X.shape)
         #return sigmoid( np.dot(self.weights1, X*self.sigma**(-2)) + self.hidden_bias + np.dot(self.weights2, X**2))
         if self.useZ:
-            return sigmoid( np.dot(self.weights1, X*np.exp(-self.z)) + self.hidden_bias + np.dot(self.weights2, X**2))
+            res =  sigmoid( np.dot(self.weights1, X*np.exp(-self.z)) + self.hidden_bias + np.dot(self.weights2, X**2))
         else:
-            return sigmoid( np.dot(self.weights1, X*self.sigma**(-2)) + self.hidden_bias + np.dot(self.weights2, X**2))
+            res = sigmoid( np.dot(self.weights1, X*self.sigma**(-2)) + self.hidden_bias + np.dot(self.weights2, X**2))
+        
+        pasDeNan
+        return res
     
     def probaVisible(self, H):
         """
@@ -264,15 +399,16 @@ class GBRBM_adapte(RBM):
     
     def SampleVisibles(self, H):
         if self.useZ:
-            D = 1 - 2*np.exp(self.z) *np.dot(H, self.weights2) 
+            D = np.abs( 1 - 2*np.exp(self.z) *np.dot(H, self.weights2) )
             moy = (np.dot(H, self.weights1) + self.visible_bias) / D
             var = np.exp(self.z / 2) / np.sqrt(D)
-            return normal(moy, var)
+            return bornage(normal(moy, var))
         else:
-            D = 1 - 2*(self.sigma**2) *np.dot(H, self.weights2) 
+            D = np.abs( 1 - 2*(self.sigma**2) *np.dot(H, self.weights2) )
             moy = (np.dot(H, self.weights1) + self.visible_bias) / D
             var = self.sigma / np.sqrt(D)
-            return normal(moy, var)
+            return bornage(normal(moy, var))
+        
     def updateParameters(self, example, x_tilde):
         h_example = self.probaHiddens(example)
         h_tilde = self.probaHiddens(x_tilde)
@@ -285,25 +421,33 @@ class GBRBM_adapte(RBM):
             invVar = self.sigma**(-2)
             
         if np.any(invVar != invVar):
-            print(invVar)
-            raise
+            print("pb updateParameters")
+            return
             
+
         self.hidden_bias += self.learningRate * (h_example - h_tilde)
         self.visible_bias += self.learningRate * invVar * (example - x_tilde)
         
+        self.hidden_bias = bornage(self.hidden_bias)
+        self.visible_bias = bornage(self.visible_bias)
+
+        
+        """
         s1 = (example - c)**2 - (x_tilde - c)**2
         s2 = example * np.dot(self.weights1.T, h_example) - x_tilde * np.dot(self.weights1.T, h_tilde)
+
         if self.useZ:
             self.z += self.learningRate *  0.01 * invVar * (0.5*s1 - s2)
             
-            self.z = np.maximum(self.z, -100)
-            self.z = np.minimum(self.z, 1)
+            self.z = 0.01*np.maximum(self.z, -100)
+            self.z = 0.01*np.minimum(self.z, 1)
         else:
             self.sigma += self.learningRate * 0.01 * (self.sigma**(-3)) * (s1 - 2*s2)
             
             self.sigma = np.maximum(self.sigma, 0)
             self.sigma = np.minimum(self.sigma, 3)
-
+        """"""
+        
         self.weights1 += self.learningRate * (np.outer(h_example, invVar * example) - np.outer(h_tilde, invVar * x_tilde))
         self.weights2 += self.learningRate * (np.outer(h_example, (example**2)) - np.outer(h_tilde, (x_tilde**2)))
     
@@ -592,51 +736,90 @@ if __name__ == '__main__':
     
     r.genIm()
     r.affParamm()
-    """
-    t0 = time()
-    
+    ""
     X = np.load('data.npy')
     (nb, cote, _) = X.shape
     size = cote**2
     training_data = X.reshape(nb, size)
-    
-    nbHidden = 1
-    lr = 0.0001
-    nbEpoch = 100
     """
-   
+    
+
+    
+    print("matrice de passage")
+    V = np.load('V.npy')
+    print(V.shape)
+    
+    print("Données")
+    X = np.load('data.npy')
+    print(X.shape)
+    
+    (nb, size) = X.shape
+    print()
+    affData(X, V)
+    
+    nbEpoch = 10
+    nbHidden = 10
+    lr = 1e-5
+    print("GBRBM_adapte_Z")
+    #V = np.eye(size)
+    r3 = GBRBM_adapte(size, nbHidden, lr,  V, True)
+    r3.train(X, max_epochs = nbEpoch)
+    r3.printError()
+    #r3.genImMoy()
+    #r3.Moyenne_EqType()
+    
+    r3.affParamm()
+    
+    #r3.genPt()
+    genNuage(r3, V, nbEpoch = 1000, nb=1000)
+    
+    """
+    lr = 0.1
     print("BRBM")
     r1 = BRBM(size, nbHidden, lr)
-    r1.train(training_data, max_epochs = nbEpoch)
+    r1.train(X, max_epochs = nbEpoch)
     r1.printError()
     #r1.genImMoy()
-    r1.Moyenne_EqType()
+    #r1.Moyenne_EqType()
     r1.affParamm()
 
-
+    print("nuage :")
+    
+    r1.genPt(V)
+    
+    genNuage(r1, V, 1000)
     #r1.genIm()  
     #r1.gen1Pixel()
     #r1.genPleinIm()
     
+ 
 
-
+    
+    lr = 0.0001
+    
     print("GBRBM_Z")
     r2 = GBRBM_Z(size, nbHidden, lr)
-    r2.train(training_data, max_epochs = nbEpoch)
+    r2.train(X, max_epochs = nbEpoch)
     r2.printError()
     #r2.genImMoy()
-    r2.Moyenne_EqType()
-    r2.affParamm()
+    #r2.Moyenne_EqType()
+    print("params :")
+    #r2.affParamm()
+    print("nuage :")
+    
+    r2.genPt(V)
+    
+    genNuage(r2, V, 1000)
     
 
     #r2.genIm()  
     #r2.gen1Pixel()
     #r2.genPleinIm()
-
+   
     
     print("GBRBM_adapte_sigma")
     r4 = GBRBM_adapte(size, nbHidden, lr, False)
-    r4.train(training_data, max_epochs = nbEpoch)
+    r4.train(X, max_epochs = nbEpoch)
     r4.printError()
     #r3.genImMoy()
     r4.Moyenne_EqType()
@@ -644,21 +827,37 @@ if __name__ == '__main__':
     r4.affParamm()
 
     
-    
     """
+    """
+    nbHidden = 2
+    lr = 1e-5
     print("GBRBM_adapte_Z")
-    r3 = GBRBM_adapte(size, nbHidden, lr, True)
-    r3.train(training_data, max_epochs = nbEpoch)
-    r3.printError()
+    r6 = GBRBM_adapte(size, nbHidden, lr, True)
+    r6.train(X, max_epochs = nbEpoch)
+    r6.printError()
     #r3.genImMoy()
-    r3.Moyenne_EqType()
+    #r3.Moyenne_EqType()
     
-    r3.affParamm()
+    r6.affParamm()
+    
+    r6.genPt()
+    genNuage(r6, 1000)
     
 
-    #r3.genIm()  
-    #r3.gen1Pixel()
-    #r3.genPleinIm()
+    nbHidden = 1000
+    lr = 1e-5
+    print("GBRBM_adapte_Z")
+    r5 = GBRBM_adapte(size, nbHidden, lr, True)
+    r5.train(X, max_epochs = nbEpoch)
+    r5.printError()
+    #r3.genImMoy()
+    #r3.Moyenne_EqType()
+    
+    r5.affParamm()
+    
+    r5.genPt()
+    genNuage(r5, 1000)
+    """
 
     
     
