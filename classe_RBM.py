@@ -107,6 +107,7 @@ class RBM:
         self.num_visible = num_visible
         self.debug_print = True
         self.k = 10 # number of Gibbs sameling steps
+        self.num_samples = 10
         
         self.hidden_bias = np.zeros(num_hidden)
         self.visible_bias = np.zeros(num_visible)
@@ -119,7 +120,7 @@ class RBM:
         
         self.cote = int(self.num_visible ** (1/2))
         
-        self.printNuage = True
+        self.printNuage = False
         
         #self.P = P
         
@@ -145,17 +146,20 @@ class RBM:
         return 
     
     def SampleVisibles(self, H):
+        return
+        """
         p_v = self.probaVisible(H)
         v = (np.random.random(self.num_visible) < p_v)*1
         pasDeNan(v)
         return v
+        """
 
     def gibbsSampling(self, X, k=1000):
         v = X
         for _ in range(self.k):
             h = self.SampleHiddens(v)
             v = self.SampleVisibles(h)
-            v = bornage(v)
+            #v = bornage(v)
             #pasDeNan(v)
         return v
     
@@ -163,7 +167,10 @@ class RBM:
         return
     
     def computeError(self, data):
+        """
+        On calcul plus la stabilité qu'une quelconque erreur
 
+        """
         sum = 0
         for example in data:
             sum += np.sum((example - self.probaVisible(self.SampleHiddens(example))) ** 2)
@@ -185,20 +192,22 @@ class RBM:
 
     def train(self, data, max_epochs = 1000):
         t0 = time()
-        x_tilde = np.random.random(self.num_visible)
+        X_tilde = np.random.random((self.num_samples, self.num_visible))
         
         for epoch in range(max_epochs):      
             for example in data :
-                x_tilde = self.gibbsSampling(x_tilde, self.k)
-                pb = 0
+                for x_tilde in X_tilde:
+                    x_tilde = self.gibbsSampling(x_tilde, self.k)
+                pb=0
+                x_tilde = np.mean(X_tilde, axis=0)
                 if not isNan(x_tilde):
                     self.updateParameters(example, x_tilde)
                 else:
                     pb += 1
                     x_tilde = np.random.random(self.num_visible)
-                    
-                if pb > 50:
-                    print("taux d'erreur : %s" % (pb / data.shape[0]))
+                
+                if pb > 0:
+                        print("taux d'erreur : %s" % (pb / data.shape[0]))
             if self.debug_print:
                 error = self.computeError(data)
                 print("Epoch %s: error is %s" % (epoch, error))
@@ -446,7 +455,7 @@ class GBRBM_adapte(RBM):
             
             self.sigma = np.maximum(self.sigma, 0)
             self.sigma = np.minimum(self.sigma, 3)
-        """"""
+        """
         
         self.weights1 += self.learningRate * (np.outer(h_example, invVar * example) - np.outer(h_tilde, invVar * x_tilde))
         self.weights2 += self.learningRate * (np.outer(h_example, (example**2)) - np.outer(h_tilde, (x_tilde**2)))
@@ -683,38 +692,6 @@ class GBRBM_Z(RBM):
     
 if __name__ == '__main__':
     
-    """
-    r = RBM(num_visible = 6, num_hidden = 2)
-    training_data = np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]])
-    
-    print(r.SampleHiddens(training_data[0]))
-    print(r.probaHiddens(training_data[0]))
-    print()
-    print(training_data[0])
-    print(r.SampleVisibles(r.SampleHiddens(training_data[0])))
-    
-    r.train(training_data)
-    
-    print()
-    print(training_data[0])
-    print(r.SampleVisibles(r.SampleHiddens(training_data[0])))
-    
-    ---
-    r.train(training_data, max_epochs = 5000)
-    print(r.weights)
-    user = np.array([[0,0,0,1,1,0]])
-    print(r.run_visible(user))
-    
-    user = np.array([[0,0,0,1,1,1]])
-    print(r.run_visible(user))
-    
-    user = np.array([[1,1,0,0,1,0]])
-    print(r.run_visible(user))
-    
-    user = np.array([[1,1,0,0,1,0]])
-    print(r.run_visible(user))
-    """
-    """
     f = gzip.open('mnist.pkl.gz', 'rb')
     u = pickle._Unpickler(f)
     u.encoding = 'latin1'
@@ -723,10 +700,10 @@ if __name__ == '__main__':
     
     X = train_set[0][:100,:].T
      
-    r = RBM(num_visible = 784, num_hidden = 500)
+    r = BRBM(num_visible = 784, num_hidden = 500, lr=0.001)
     training_data = X.T
     #r.train(training_data, max_epochs = 10)
-    r.trainWithBatch(training_data, max_epochs = 100, bs = 5)
+    r.train(training_data, max_epochs = 100)
     r.printError()
 
     im = X[:,0]
@@ -736,13 +713,13 @@ if __name__ == '__main__':
     
     r.genIm()
     r.affParamm()
-    ""
+    """
     X = np.load('data.npy')
     (nb, cote, _) = X.shape
     size = cote**2
     training_data = X.reshape(nb, size)
     """
-    
+    """
 
     
     print("matrice de passage")
@@ -773,6 +750,7 @@ if __name__ == '__main__':
     #r3.genPt()
     genNuage(r3, V, nbEpoch = 1000, nb=1000)
     
+    """
     """
     lr = 0.1
     print("BRBM")

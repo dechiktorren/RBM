@@ -21,7 +21,7 @@ data =[]
 Ng = 1
 
 # Dimention
-D = 100
+D = 2
 
 # length 
 L = 10
@@ -32,7 +32,7 @@ Center[0] = 2*np.ones(D)
 
 # Standard deviation 
 #Sigma = np.array([0.5, 0.5])
-Sigma = np.array([0.2])
+Sigma = np.array([0.5])
 
 # Number of generated data
 M = np.zeros(Ng, dtype = int)
